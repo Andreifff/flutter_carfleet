@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "610319907335",
+    "project_id": "carfleetmanager-1e548",
+    "storage_bucket": "carfleetmanager-1e548.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:610319907335:android:ea0a0f3c2f2a086f5788a2",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBym-eEwvqlWgtreQ534uY74TfmZmOF3G0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
