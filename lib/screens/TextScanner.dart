@@ -1,6 +1,7 @@
 import 'dart:io';
-
+import 'dart:convert';
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -17,7 +18,7 @@ class TextScanner extends StatefulWidget {
 class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
   bool isPermissionGranted = false;
   late final Future<void> future;
-
+  List<String> carMakes = [];
   //For controlling camera
   CameraController? cameraController;
   final textRecogniser = TextRecognizer();
@@ -28,6 +29,11 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
     //To display camera feed we need to add WidgetsBindingObserver.
     WidgetsBinding.instance.addObserver(this);
     future = requestCameraPermission();
+    loadCarMakes().then((makes) {
+      setState(() {
+        carMakes = makes;
+      });
+    });
   }
 
   @override
@@ -160,6 +166,13 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
     }
   }
 
+  Future<List<String>> loadCarMakes() async {
+    final String response =
+        await rootBundle.loadString('assets/car_makes.json');
+    final List<dynamic> data = json.decode(response);
+    return data.cast<String>(); // Cast the dynamic list to a List<String>
+  }
+
   Future<void> scanImage() async {
     if (cameraController == null) {
       return;
@@ -198,7 +211,8 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
         final inputImage = InputImage.fromFile(croppedImageFile);
         final RecognizedText recognizedText =
             await textRecogniser.processImage(inputImage);
-
+        //debug
+        print("Loaded car makes: $carMakes");
         // Extract VIN and License Plate using Regex
         String vinPattern = r'\b[A-HJ-NPR-Z0-9]{17}\b';
         String licensePlatePattern =
@@ -209,6 +223,7 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
 
         String? vin;
         String? licensePlate;
+        String? carMake;
 
         // Search through all the blocks of text to find matches
         for (TextBlock block in recognizedText.blocks) {
@@ -221,6 +236,17 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
             if (licensePlate == null && licensePlateRegex.hasMatch(line.text)) {
               licensePlate = licensePlateRegex.firstMatch(line.text)?.group(0);
             }
+            print("Processing line: ${line.text}");
+            //Check if car make is found
+            if (carMake == null) {
+              for (String make in carMakes) {
+                if (line.text.toUpperCase().contains(make.toUpperCase())) {
+                  carMake = make;
+                  print("Car make found: $carMake");
+                  break; // Stop searching once the first make is found
+                }
+              }
+            }
           }
         }
 
@@ -230,7 +256,8 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
             builder: (context) => ResultScreen(
                 text: recognizedText.text,
                 licensePlate: licensePlate,
-                vin: vin),
+                vin: vin,
+                carMake: carMake),
           ),
         );
       }

@@ -9,9 +9,10 @@ class ResultScreen extends StatefulWidget {
   final String text;
   final String? licensePlate;
   final String? vin;
+  final String? carMake;
 
   const ResultScreen(
-      {Key? key, required this.text, this.licensePlate, this.vin})
+      {Key? key, required this.text, this.licensePlate, this.vin, this.carMake})
       : super(key: key);
 
   @override
@@ -29,7 +30,7 @@ class _ResultScreenState extends State<ResultScreen> {
     super.initState();
     _licensePlateController = TextEditingController(text: widget.licensePlate);
     _vinController = TextEditingController(text: widget.vin);
-    _carMakeController = TextEditingController();
+    _carMakeController = TextEditingController(text: widget.carMake);
     _carModelController = TextEditingController();
   }
 
