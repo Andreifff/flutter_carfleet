@@ -6,6 +6,8 @@ import 'package:flutter_application_2/screens/TextScanner.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_2/models/car.dart';
 import 'package:flutter_application_2/screens/loginScreen.dart';
+import 'package:flutter_application_2/screens/SettingsScreen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -15,6 +17,62 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String fcmToken = 'Fetching token...';
+
+  @override
+  void initState() {
+    super.initState();
+    updateFcmToken();
+    ;
+//new
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) {
+        print('Message received on app launch: ${message.notification?.body}');
+      }
+    });
+
+    FirebaseMessaging.onMessage.listen((message) {
+      print(
+          'Message received while app is in foreground: ${message.notification?.body}');
+    });
+
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      print('Message clicked!');
+    });
+
+    FirebaseMessaging.instance.getToken().then((token) {
+      print("Device token: $token");
+      setState(() {
+        fcmToken = token ?? "Token not available";
+      });
+      print(fcmToken);
+    });
+    //new
+  }
+
+  Future<void> updateFcmToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await FirebaseMessaging.instance.getToken();
+    if (user != null && token != null) {
+      try {
+        var userDocRef =
+            FirebaseFirestore.instance.collection('users').doc(user.uid);
+        var doc = await userDocRef.get();
+        if (doc.exists) {
+          await userDocRef.update({
+            'fcmToken': token,
+          });
+          print("FCM token updated for user: ${user.uid}");
+        } else {
+          print(
+              "No user document found for ID: ${user.uid}, unable to update FCM token.");
+        }
+      } catch (e) {
+        print("Failed to update FCM token for user: ${user.uid}, error: $e");
+      }
+    }
+  }
+
   Future<List<Car>> fetchCars() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -50,46 +108,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refreshCarsList() async {
     setState(() {
-      // This triggers the FutureBuilder to reload and fetch the cars again
+      //fetch the cars again
     });
   }
-// Future<void> navigateAndCheckIfRefreshNeeded(BuildContext context) async {
-//   final result = await Navigator.push(
-//     context,
-//     MaterialPageRoute(
-//       builder: (context) => CarDetailsScreen(car: car), // Make sure to pass the correct car or necessary data
-//     ),
-//   );
 
-//   if (result == true) {
-//     // Refresh your data here
-//     _refreshCarsList();
-//   }
-// }
-  // @override
-  // Widget build(BuildContext context) {
-  //   return Scaffold(
-  //     body: Center(
-  //       child: ElevatedButton(
-  //         onPressed: () {
-  //           Navigator.push(context,
-  //               MaterialPageRoute(builder: (context) => TextScanner()));
-  //         },
-  //         child: const Text('Open Camera to scan'),
-  //       ),
-  //     ),
-  //   );
-  // }
   Future<void> performLogout() async {
-    // Assuming you're using Firebase Auth for example
     await FirebaseAuth.instance.signOut();
 
-    // Navigate to the login screen (replace the current route)
-    // Ensure this is done in a way that doesn't conflict with drawer navigation
-    // This might need to be scheduled post frame to ensure the drawer pop has completed
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => LoginPage()),
+        MaterialPageRoute(builder: (context) => const LoginPage()),
       );
     });
   }
@@ -98,18 +126,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: RefreshIndicator(
-        // The onRefresh function that's called when the user pulls down to refresh
         onRefresh: _refreshCarsList,
         child: FutureBuilder<List<Car>>(
-          future: fetchCars(), // This fetches the cars, same as before
+          future: fetchCars(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              // Using a SingleChildScrollView with a sized box to ensure the RefreshIndicator always works
               return SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
+                physics: const AlwaysScrollableScrollPhysics(),
                 child: SizedBox(
                   height: MediaQuery.of(context).size.height,
-                  child: Center(
+                  child: const Center(
                     child: CircularProgressIndicator(),
                   ),
                 ),
@@ -119,45 +145,53 @@ class _HomeScreenState extends State<HomeScreen> {
             final cars = snapshot.data ?? [];
             if (cars.isEmpty) {
               return SingleChildScrollView(
-                physics: AlwaysScrollableScrollPhysics(),
+                physics: const AlwaysScrollableScrollPhysics(),
                 child: SizedBox(
                   height: MediaQuery.of(context).size.height,
-                  child: Center(child: Text('No cars added yet.')),
+                  child: const Center(child: Text('No cars added yet.')),
                 ),
               );
             }
 
-            return ListView.builder(
-              itemCount: cars.length,
-              itemBuilder: (context, index) {
-                final car = cars[index];
-                return ListTile(
-                  title: Text(car.make + ' ' + car.model),
-                  subtitle: Text('License Plate: ${car.licensePlate}'),
-                  onTap: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => CarDetailsScreen(car: car)),
-                    );
-                    if (result == true) {
-                      _refreshCarsList();
-                    }
-                  },
-                );
-              },
+            return Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: cars.length,
+                    itemBuilder: (context, index) {
+                      final car = cars[index];
+                      return ListTile(
+                        title: Text(car.make + ' ' + car.model),
+                        subtitle: Text('License Plate: ${car.licensePlate}'),
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    CarDetailsScreen(car: car)),
+                          );
+                          if (result == true) {
+                            _refreshCarsList();
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
           },
         ),
       ),
       appBar: AppBar(
-        title: Text('Fleet Manager'),
+        title: const Text('Fleet Manager'),
       ),
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: <Widget>[
-            DrawerHeader(
+            const DrawerHeader(
               decoration: BoxDecoration(
                 color: Colors.blue,
               ),
@@ -170,39 +204,41 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             ListTile(
-              leading: Icon(Icons.logout),
-              title: Text('Logout'),
+              leading: const Icon(Icons.logout),
+              title: const Text('Logout'),
               onTap: () async {
-                // Close the drawer first
-                Navigator.pop(
-                    context); // Make sure to close the drawer before showing the dialog
-                // Show a confirmation dialog
+                Navigator.pop(context);
                 final shouldLogout = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: Text('Logout'),
-                    content: Text('Are you sure you want to logout?'),
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to logout?'),
                     actions: <Widget>[
                       TextButton(
-                        child: Text('Cancel'),
-                        onPressed: () => Navigator.of(context)
-                            .pop(false), // User pressed Cancel, don't logout
+                        child: const Text('Cancel'),
+                        onPressed: () => Navigator.of(context).pop(false),
                       ),
                       TextButton(
-                        child: Text('Logout'),
-                        onPressed: () => Navigator.of(context)
-                            .pop(true), // User pressed Logout, do logout
+                        child: const Text('Logout'),
+                        onPressed: () => Navigator.of(context).pop(true),
                       ),
                     ],
                   ),
                 );
 
-                // Check the user's decision
                 if (shouldLogout == true) {
-                  await performLogout(); // Perform logout operation
+                  await performLogout();
                 }
               },
-            )
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text('Settings'),
+              onTap: () {
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (context) => SettingsScreen()));
+              },
+            ),
           ],
         ),
       ),
@@ -210,11 +246,11 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => TextScanner()),
+            MaterialPageRoute(builder: (context) => const TextScanner()),
           );
         },
-        child: Icon(Icons.camera_alt),
         tooltip: 'Open Camera to scan',
+        child: const Icon(Icons.camera_alt),
       ),
     );
   }

@@ -26,7 +26,6 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    //To display camera feed we need to add WidgetsBindingObserver.
     WidgetsBinding.instance.addObserver(this);
     future = requestCameraPermission();
     loadCarMakes().then((makes) {
@@ -44,7 +43,6 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  //It'll check if app is in foreground or background
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (cameraController == null || !cameraController!.value.isInitialized) {
@@ -77,12 +75,12 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
                           child: CameraPreview(cameraController!),
                         );
                       } else {
-                        return const LinearProgressIndicator();
+                        return LinearProgressIndicator();
                       }
                     }),
               Scaffold(
                 appBar: AppBar(
-                  title: const Text('Registration document scanning'),
+                  title: Text('Registration document scanning'),
                 ),
                 backgroundColor:
                     isPermissionGranted ? Colors.transparent : null,
@@ -102,9 +100,8 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
                       )
                     : Center(
                         child: Container(
-                          padding:
-                              const EdgeInsets.only(left: 24.0, right: 24.0),
-                          child: const Text(
+                          padding: EdgeInsets.only(left: 24.0, right: 24.0),
+                          child: Text(
                             'Camera Permission Denied',
                             textAlign: TextAlign.center,
                           ),
@@ -152,14 +149,12 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
     setState(() {});
   }
 
-  //Start Camera
   void startCamera() {
     if (cameraController != null) {
       cameraSelected(cameraController!.description);
     }
   }
 
-  //Stop Camera
   void stopCamera() {
     if (cameraController != null) {
       cameraController?.dispose();
@@ -170,7 +165,7 @@ class _TextScannerState extends State<TextScanner> with WidgetsBindingObserver {
     final String response =
         await rootBundle.loadString('assets/car_makes.json');
     final List<dynamic> data = json.decode(response);
-    return data.cast<String>(); // Cast the dynamic list to a List<String>
+    return data.cast<String>();
   }
 
   Future<void> scanImage() async {

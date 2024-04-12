@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_2/models/car_document.dart';
 import 'package:flutter_application_2/models/spending.dart';
 
 class Car {
   final List<Spending> spendings;
+  final List<CarDocument> documents;
   final String id;
   final String make;
   final String model;
@@ -22,9 +24,9 @@ class Car {
     this.insurance,
     this.nextServiceInterval,
     this.spendings = const [],
+    this.documents = const [],
   });
 
-  // Add the copyWith method here
   Car copyWith({
     String? id,
     String? make,
@@ -35,6 +37,7 @@ class Car {
     DateTime? insurance,
     DateTime? nextServiceInterval,
     List<Spending>? spendings,
+    List<CarDocument>? documents,
   }) {
     return Car(
       id: id ?? this.id,
@@ -49,11 +52,18 @@ class Car {
   }
 
   factory Car.fromFirestore(Map<String, dynamic> data, String documentId) {
-    // Attempt to convert the spendings list from Firestore, if it exists.
     var spendingsData = data['spendings'] as List<dynamic>? ?? [];
-    List<Spending> spendingsList = spendingsData
-        .map((spendingJson) =>
-            Spending.fromFirestore(spendingJson as Map<String, dynamic>))
+    var documentsData = data['documents'] as List<dynamic>? ?? [];
+
+    List<Spending> spendingsList = spendingsData.asMap().entries.map((entry) {
+      int idx = entry.key;
+      Map<String, dynamic> spendingMap = entry.value;
+      return Spending.fromFirestore(spendingMap, 'spending_$idx');
+    }).toList();
+
+    List<CarDocument> documentsList = documentsData
+        .map((docData) => CarDocument.fromFirestore(
+            docData as Map<String, dynamic>, docData['id']))
         .toList();
 
     return Car(
@@ -66,6 +76,7 @@ class Car {
       insurance: data['insurance']?.toDate(),
       nextServiceInterval: data['nextServiceInterval']?.toDate(),
       spendings: spendingsList,
+      documents: documentsList,
     );
   }
 
@@ -82,6 +93,7 @@ class Car {
           ? Timestamp.fromDate(nextServiceInterval!)
           : null,
       'spendings': spendings.map((spending) => spending.toJson()).toList(),
+      'documents': documents.map((document) => document.toJson()).toList(),
     };
   }
 }

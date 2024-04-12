@@ -1,10 +1,21 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_2/models/car.dart'; // Update this import path as necessary
+import 'package:flutter_application_2/models/car.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_2/models/car_document.dart';
 import 'package:flutter_application_2/models/spending.dart';
+import 'package:flutter_application_2/screens/StatisticsScreen.dart';
+import 'package:flutter_application_2/services/firebase_api.dart';
+import 'package:flutter_application_2/services/utilities.dart';
 import 'package:flutter_application_2/widgets/dateProgressCard.dart';
 import 'package:flutter_application_2/widgets/spendingsCard.dart';
+import 'package:flutter_application_2/widgets/documentCard.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CarDetailsScreen extends StatefulWidget {
   final Car car;
@@ -19,51 +30,52 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
   Car? updatedCar; // Holds the updated car details
   late Car _car;
   Car? _editableCar; // A mutable copy of the car
+  late TextEditingController currencyController;
+  String selectedCurrency = 'EUR';
 
   List<Spending> spendings = [];
-  final List<String> categories = [
-    'Fuel',
-    'Maintenance',
-    'Other',
-    'Custom'
-  ]; // Add 'Custom' option
+  final List<String> categories = ['Fuel', 'Maintenance', 'Other', 'Custom'];
   String? selectedCategory;
-  bool showCustomCategoryField =
-      false; // Flag to show/hide the custom category TextField
-  TextEditingController customCategoryController =
-      TextEditingController(); // Controller for the custom category TextField
+  bool showCustomCategoryField = false;
+  TextEditingController customCategoryController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    updatedCar = widget.car; // Initial car details
+    updatedCar = widget.car;
     _editableCar = widget.car;
     selectedCategory = categories.first;
+    _loadCurrencyPreference();
   }
 
   Future<void> updateCarDetailsInFirestore(String field, dynamic value) async {
-    await FirebaseFirestore.instance
-        .collection('cars')
-        .doc(_editableCar!.id)
-        .update({
-      field: value,
-    });
+    try {
+      var documentReference =
+          FirebaseFirestore.instance.collection('cars').doc(_editableCar!.id);
+      print("Attempting to update document with ID: ${_editableCar!.id}");
 
-    // After Firestore update, refresh local editable copy to reflect changes
-    _refreshEditableCar();
+      var doc = await documentReference.get();
+
+      if (doc.exists) {
+        await documentReference.update({field: value});
+        print("Document updated");
+        _refreshEditableCar();
+      } else {
+        print("Document with ID ${_editableCar!.id} does not exist.");
+      }
+    } catch (e) {
+      print("Error updating document: $e");
+    }
   }
 
   Future<void> _refreshEditableCar() async {
-    // Fetch the updated car details from Firestore
     DocumentSnapshot snapshot = await FirebaseFirestore.instance
         .collection('cars')
         .doc(_editableCar!.id)
         .get();
     Map<String, dynamic>? data = snapshot.data() as Map<String, dynamic>?;
-
     if (data != null) {
       setState(() {
-        // Pass both the data and the document ID to the fromFirestore method
         _editableCar = Car.fromFirestore(data, snapshot.id);
       });
     }
@@ -113,8 +125,8 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
               'Make: ${_editableCar?.make ?? 'N/A'}'), // Displays the car make
         ),
         IconButton(
-          icon: Icon(Icons.edit), // The edit icon
-          onPressed: _showEditMakeDialog2, // Calls the dialog when tapped
+          icon: Icon(Icons.edit),
+          onPressed: _showEditMakeDialog2,
         ),
       ],
     );
@@ -139,14 +151,10 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
 
       return '$part1-$part2-$part3';
     }
-
-    // Return the input as is if it doesn't match the pattern
-    // Consider handling this case, e.g., showing an error to the user
     return input;
   }
 
-  //new version for the ones above
-//FOR EDITING THE FIELDS IN THE CARDETAILSSCRENN
+//FOR EDITING THE FIELDS IN THE CARDETAILSSCREEN
   Future<void> _showEditDialog(
       String field, String currentValue, String hintText, String title) async {
     final TextEditingController controller =
@@ -174,9 +182,7 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
       },
     );
 
-    // Check for non-null newValue and difference from currentValue
     if (newValue != null && newValue.trim() != currentValue) {
-      // Apply formatting if the field being edited is the license plate
       String finalValue = field == "licensePlate"
           ? formatLicensePlate(newValue.trim())
           : newValue.trim();
@@ -184,23 +190,6 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
       await updateCarDetailsInFirestore(field, finalValue);
       _refreshEditableCar();
     }
-  }
-
-  String _formatLicensePlate(String input) {
-    input = input.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
-
-    if (input.startsWith('B') && input.length > 3) {
-      // Format as B-100-XYZ or similar
-      return '${input.substring(0, 1)}-${input.substring(1, 4)}-${input.substring(4)}'
-          .trimRight();
-    } else {
-      // Format as XX-00-XYZ or similar
-      return '${input.substring(0, 2)}-${input.substring(2, 4)}-${input.substring(4)}'
-          .trimRight();
-    }
-
-    // Return input as is if it doesn't meet any of the above criteria
-    return input;
   }
 
   bool _isValidLicensePlate(String input) {
@@ -230,19 +219,16 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
     if (carId.isNotEmpty) {
       try {
         await FirebaseFirestore.instance.collection('cars').doc(carId).delete();
-        Navigator.pop(context, true); // Navigate back after successful deletion
+        Navigator.pop(context, true);
       } catch (e) {
         print("Error deleting car: $e");
-        // Optionally, show a snackbar or dialog to inform the user of the error
       }
     } else {
       print("Car ID is empty, cannot delete car.");
-      // Handle case where car ID is somehow empty
     }
   }
 
   Future<void> deleteCar(BuildContext context, String carId) async {
-    // Show a confirmation dialog before deleting
     final bool? confirmDelete = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -265,12 +251,10 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
       },
     );
 
-    // Proceed with deletion if confirmed
     if (confirmDelete == true && carId.isNotEmpty) {
       try {
         await FirebaseFirestore.instance.collection('cars').doc(carId).delete();
-        Navigator.pop(context,
-            true); // Navigate back after successful deletion, potentially passing 'true' to indicate that deletion occurred
+        Navigator.pop(context, true);
       } catch (e) {
         // Handle deletion error
         print("Error deleting car: $e");
@@ -280,21 +264,8 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
     }
   }
 
-  Future<void> _selectDate(BuildContext context, String field) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2025),
-    );
-    if (picked != null) {
-      updateCarDate(field, picked);
-    }
-  }
-
-//THIS WAS WORKING TOO
+  //THIS WAS WORKING TOO
   Future<void> updateCarDate(String field, DateTime date) async {
-    // Update local state immediately for a responsive UI
     DateTime? previousValue;
     setState(() {
       previousValue = getFieldDate(field);
@@ -308,30 +279,14 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
           .update({
         field: Timestamp.fromDate(date),
       });
-      // Optional: Confirm update or refetch details if necessary
       print("Date updated successfully in Firestore.");
     } catch (e) {
       print("Error updating date in Firestore: $e");
-      // Revert to previous value if Firestore update fails
       setState(() {
         setFieldDate(field, previousValue);
       });
     }
   }
-
-//   void updateCarDate2(String field, DateTime date) async {
-//   // Optimistically update UI
-//   setState(() {
-//     _editableCar = _editableCar.copyWith(field: date); // Adjust copyWith to handle the field dynamically or use specific methods
-//   });
-
-//   try {
-//     await FirebaseFirestore.instance.collection('cars').doc(_editableCar?.id).update({field: date});
-//     // Firestore update succeeded, now fetch updated details or leave optimistic update
-//   } catch (e) {
-//     // Firestore update failed, revert optimistic update or handle error
-//   }
-// }
 
   DateTime? getFieldDate(String field) {
     switch (field) {
@@ -359,22 +314,7 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
         break;
     }
   }
-//this was working
-  // Future<void> fetchUpdatedCarDetails() async {
-  //   DocumentSnapshot snapshot = await FirebaseFirestore.instance
-  //       .collection('cars')
-  //       .doc(_editableCar!.id)
-  //       .get();
 
-  //   if (snapshot.exists && snapshot.data() != null) {
-  //     setState(() {
-  //       // Convert the snapshot data to a Map<String, dynamic>
-  //       Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-  //       // Provide both the data and the document ID to the fromFirestore method
-  //       _editableCar = Car.fromFirestore(data, snapshot.id);
-  //     });
-  //   }
-  // }
   Future<void> fetchUpdatedCarDetails() async {
     var snapshot = await FirebaseFirestore.instance
         .collection('cars')
@@ -389,15 +329,255 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
     }
   }
 
+  Future<void> uploadDocumentPicker(BuildContext context) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+
+    if (result != null) {
+      PlatformFile file = result.files.first;
+      if (file.path == null) {
+        print("File path is null");
+        return;
+      }
+      File documentFile = File(file.path!);
+      String fileName = file.name;
+      try {
+        String uniqueFileName =
+            "${DateTime.now().millisecondsSinceEpoch}_$fileName";
+        Reference storageReference =
+            FirebaseStorage.instance.ref().child("documents/$uniqueFileName");
+
+        await storageReference.putFile(documentFile);
+
+        String fileUrl = await storageReference.getDownloadURL();
+
+        await FirebaseFirestore.instance.collection("carDocuments").add({
+          'name': fileName, // Original file name
+          'url': fileUrl, // URL to access the file
+          'uploadedAt': FieldValue.serverTimestamp(),
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("File uploaded successfully")));
+        refreshDocuments();
+      } catch (e) {
+        print("Error uploading file: $e");
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Failed to upload file")));
+      }
+    } else {
+      print("No file selected");
+    }
+  }
+
+  Future<void> uploadDocumentPicker2(BuildContext context) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
+    );
+
+    if (result != null && result.files.single.path != null) {
+      File file = File(result.files.single.path!);
+      String fileName = result.files.single.name;
+      String documentName =
+          '${DateTime.now().millisecondsSinceEpoch}_$fileName';
+      String filePath = 'cars/${widget.car.id}/documents/$documentName';
+
+      try {
+        Reference storageReference =
+            FirebaseStorage.instance.ref().child(filePath);
+        await storageReference.putFile(file);
+        String fileUrl = await storageReference.getDownloadURL();
+        // Save document details to Firestore under the car's documents collection
+        await FirebaseFirestore.instance
+            .collection('cars')
+            .doc(widget.car.id)
+            .collection('documents')
+            .doc(documentName)
+            .set({
+          'name': fileName,
+          'url': fileUrl,
+          'uploadedAt': FieldValue.serverTimestamp(),
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Document uploaded successfully")));
+        _refreshEditableCar();
+      } catch (e) {
+        print("Error uploading document: $e");
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error uploading document")));
+      }
+    } else {
+      print("No file selected");
+    }
+  }
+
+  Future<void> uploadDocument(File document, String carId) async {
+    try {
+      print(
+          'Is user authenticated? ${FirebaseAuth.instance.currentUser != null}');
+
+      print("Uploading document for car ID: $carId");
+
+      DocumentReference docRef = FirebaseFirestore.instance
+          .collection('cars')
+          .doc(carId)
+          .collection('documents')
+          .doc();
+
+      String documentName = docRef.id;
+      String filePath = 'cars/$carId/documents/$documentName';
+
+      print("Generated file path: $filePath");
+
+      Reference storageReference =
+          FirebaseStorage.instance.ref().child(filePath);
+      await storageReference.putFile(document);
+
+      String documentUrl = await storageReference.getDownloadURL();
+      print(documentUrl);
+
+      await docRef.set({
+        'name': documentName,
+        'url': documentUrl,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      _refreshEditableCar();
+    } catch (e, stackTrace) {
+      if (e is FirebaseException) {
+        print('FirebaseException Code: ${e.code}');
+        print('FirebaseException Message: ${e.message}');
+      } else {
+        print('Error uploading document: $e');
+      }
+      print('Stack trace: $stackTrace');
+    }
+  }
+
+  // Future<void> _showAddSpendingDialog(BuildContext context) async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   String defaultCurrency = prefs.getString('selectedCurrency') ?? 'EUR';
+  //   TextEditingController amountController = TextEditingController();
+  //   TextEditingController odometerController = TextEditingController();
+  //   //TextEditingController currencyController = TextEditingController();
+  //   String selectedCategory = 'Fuel'; // Default to first category
+  //   TextEditingController customCategoryController = TextEditingController();
+  //   bool showCustomCategoryField = false;
+  //   String selectedCurrency = defaultCurrency;
+
+  //   showDialog(
+  //     context: context,
+  //     builder: (BuildContext dialogContext) {
+  //       return StatefulBuilder(
+  //         builder: (BuildContext context, StateSetter setState) {
+  //           return AlertDialog(
+  //             title: Text("Add Spending"),
+  //             content: SingleChildScrollView(
+  //               child: Column(
+  //                 mainAxisSize: MainAxisSize.min,
+  //                 children: [
+  //                   DropdownButtonFormField<String>(
+  //                     value: selectedCategory,
+  //                     items: categories
+  //                         .map<DropdownMenuItem<String>>((String value) {
+  //                       return DropdownMenuItem<String>(
+  //                         value: value,
+  //                         child: Text(value),
+  //                       );
+  //                     }).toList(),
+  //                     onChanged: (value) {
+  //                       setState(() {
+  //                         selectedCategory = value ?? categories.first;
+  //                         showCustomCategoryField = value == 'Custom';
+  //                       });
+  //                     },
+  //                   ),
+  //                   if (showCustomCategoryField) // Conditionally show the TextField
+  //                     TextField(
+  //                       controller: customCategoryController,
+  //                       decoration:
+  //                           InputDecoration(hintText: "Custom Category"),
+  //                     ),
+  //                   TextField(
+  //                     controller: amountController,
+  //                     decoration: InputDecoration(hintText: "Amount"),
+  //                     keyboardType:
+  //                         TextInputType.numberWithOptions(decimal: true),
+  //                   ),
+  //                   TextField(
+  //                     controller: odometerController,
+  //                     decoration: InputDecoration(hintText: "Odometer"),
+  //                     keyboardType: TextInputType.number,
+  //                   ),
+  //                   // TextField(
+  //                   //   controller: currencyController,
+  //                   //   decoration:
+  //                   //       InputDecoration(hintText: "Currency (e.g., USD)"),
+  //                   // ),
+  //                   DropdownButton<String>(
+  //                     value:
+  //                         defaultCurrency, // This should be the state variable in your dialog
+  //                     onChanged: (String? newValue) {
+  //                       setState(() {
+  //                         selectedCurrency = newValue!;
+  //                       });
+  //                     },
+  //                     items: CurrencyUtil.currencies
+  //                         .map<DropdownMenuItem<String>>((String value) {
+  //                       return DropdownMenuItem<String>(
+  //                         value: value,
+  //                         child: Text(value),
+  //                       );
+  //                     }).toList(),
+  //                   )
+  //                 ],
+  //               ),
+  //             ),
+  //             actions: [
+  //               TextButton(
+  //                 child: Text("Cancel"),
+  //                 onPressed: () {
+  //                   Navigator.of(context).pop();
+  //                 },
+  //               ),
+  //               TextButton(
+  //                 child: Text("Add"),
+  //                 onPressed: () {
+  //                   String finalCategory = showCustomCategoryField
+  //                       ? customCategoryController.text
+  //                       : selectedCategory;
+  //                   if (amountController.text.isNotEmpty &&
+  //                       odometerController.text.isNotEmpty &&
+  //                       currencyController.text.isNotEmpty) {
+  //                     _addSpendingToFirestore(
+  //                       finalCategory,
+  //                       double.parse(amountController.text),
+  //                       int.parse(odometerController.text),
+  //                       currencyController.text,
+  //                     );
+  //                     Navigator.of(context).pop();
+  //                   }
+  //                 },
+  //               ),
+  //             ],
+  //           );
+  //         },
+  //       );
+  //     },
+  //   );
+  // }
+  //This one above is working
+
   Future<void> _showAddSpendingDialog(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    String defaultCurrency = prefs.getString('selectedCurrency') ?? 'EUR';
     TextEditingController amountController = TextEditingController();
     TextEditingController odometerController = TextEditingController();
-    TextEditingController currencyController = TextEditingController();
-    // Removed categoryController as we're going to use local state for category selection
-
     String selectedCategory = 'Fuel'; // Default to first category
     TextEditingController customCategoryController = TextEditingController();
     bool showCustomCategoryField = false;
+    String currencyInDialog = defaultCurrency;
 
     showDialog(
       context: context,
@@ -443,21 +623,33 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
                       decoration: InputDecoration(hintText: "Odometer"),
                       keyboardType: TextInputType.number,
                     ),
-                    TextField(
-                      controller: currencyController,
-                      decoration:
-                          InputDecoration(hintText: "Currency (e.g., USD)"),
+                    // TextField(
+                    //   controller: currencyController,
+                    //   decoration:
+                    //       InputDecoration(hintText: "Currency (e.g., USD)"),
+                    // ),
+                    DropdownButton<String>(
+                      value:
+                          currencyInDialog, // Use the dialog's currency state
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          currencyInDialog =
+                              newValue!; // Update the dialog's currency state
+                        });
+                      },
+                      items: CurrencyUtil.currencies
+                          .map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),
               ),
               actions: [
-                TextButton(
-                  child: Text("Cancel"),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
+                // Actions...
                 TextButton(
                   child: Text("Add"),
                   onPressed: () {
@@ -465,13 +657,12 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
                         ? customCategoryController.text
                         : selectedCategory;
                     if (amountController.text.isNotEmpty &&
-                        odometerController.text.isNotEmpty &&
-                        currencyController.text.isNotEmpty) {
+                        odometerController.text.isNotEmpty) {
                       _addSpendingToFirestore(
                         finalCategory,
                         double.parse(amountController.text),
                         int.parse(odometerController.text),
-                        currencyController.text,
+                        currencyInDialog, // Use the selected currency from dialog
                       );
                       Navigator.of(context).pop();
                     }
@@ -485,9 +676,228 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
     );
   }
 
+  // Future<void> _showEditSpendingDialog(
+  //     BuildContext context, Spending spending, String spendingId) async {
+  //   // Controllers pre-filled with the spending data
+  //   TextEditingController amountController =
+  //       TextEditingController(text: spending.amount.toString());
+  //   TextEditingController odometerController =
+  //       TextEditingController(text: spending.odometer.toString());
+  //   TextEditingController currencyController =
+  //       TextEditingController(text: spending.currency);
+
+  //   String selectedCategory = spending.category; // Pre-fill the category
+  //   TextEditingController customCategoryController = TextEditingController();
+  //   bool showCustomCategoryField = selectedCategory == 'Custom';
+
+  //   // In case 'Custom' category was selected, pre-fill the custom category field
+  //   if (showCustomCategoryField) {
+  //     customCategoryController.text = spending.category;
+  //   }
+
+  //   showDialog(
+  //     context: context,
+  //     builder: (BuildContext dialogContext) {
+  //       return StatefulBuilder(
+  //         builder: (BuildContext context, StateSetter setState) {
+  //           return AlertDialog(
+  //             title: Text("Edit Spending"),
+  //             content: SingleChildScrollView(
+  //               child: Column(
+  //                 mainAxisSize: MainAxisSize.min,
+  //                 children: [
+  //                   DropdownButtonFormField<String>(
+  //                     value: selectedCategory,
+  //                     items: categories
+  //                         .map<DropdownMenuItem<String>>((String value) {
+  //                       return DropdownMenuItem<String>(
+  //                         value: value,
+  //                         child: Text(value),
+  //                       );
+  //                     }).toList(),
+  //                     onChanged: (value) {
+  //                       setState(() {
+  //                         selectedCategory = value ?? categories.first;
+  //                         showCustomCategoryField = value == 'Custom';
+  //                       });
+  //                     },
+  //                   ),
+  //                   if (showCustomCategoryField) // Conditionally show the TextField
+  //                     TextField(
+  //                       controller: customCategoryController,
+  //                       decoration:
+  //                           InputDecoration(hintText: "Custom Category"),
+  //                     ),
+  //                   TextField(
+  //                     controller: amountController,
+  //                     decoration: InputDecoration(hintText: "Amount"),
+  //                     keyboardType:
+  //                         TextInputType.numberWithOptions(decimal: true),
+  //                   ),
+  //                   TextField(
+  //                     controller: odometerController,
+  //                     decoration: InputDecoration(hintText: "Odometer"),
+  //                     keyboardType: TextInputType.number,
+  //                   ),
+  //                   TextField(
+  //                     controller: currencyController,
+  //                     decoration:
+  //                         InputDecoration(hintText: "Currency (e.g., USD)"),
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //             actions: [
+  //               TextButton(
+  //                 child: Text("Cancel"),
+  //                 onPressed: () => Navigator.of(dialogContext).pop(),
+  //               ),
+  //               TextButton(
+  //                 child: Text("Save"),
+  //                 onPressed: () {
+  //                   String finalCategory = showCustomCategoryField
+  //                       ? customCategoryController.text
+  //                       : selectedCategory;
+  //                   // Implement the logic for updating the spending in Firestore
+  //                   _updateSpendingInFirestore(
+  //                       spendingId,
+  //                       finalCategory,
+  //                       double.parse(amountController.text),
+  //                       int.parse(odometerController.text),
+  //                       currencyController.text);
+  //                   Navigator.of(dialogContext).pop();
+  //                 },
+  //               ),
+  //             ],
+  //           );
+  //         },
+  //       );
+  //     },
+  //   );
+  // }
+
+  void refreshDocuments() {
+    setState(() {});
+  }
+
+  Future<void> _updateSpending(
+      String spendingId, Spending existingSpending) async {
+    TextEditingController categoryController =
+        TextEditingController(text: existingSpending.category);
+    TextEditingController amountController =
+        TextEditingController(text: existingSpending.amount.toString());
+    TextEditingController odometerController =
+        TextEditingController(text: existingSpending.odometer.toString());
+    TextEditingController currencyController =
+        TextEditingController(text: existingSpending.currency);
+
+    final selectedDate = existingSpending.date;
+
+    final bool? updated = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Update Spending"),
+          content: SingleChildScrollView(
+            child: Column(
+              children: <Widget>[
+                TextField(
+                  controller: categoryController,
+                  decoration: InputDecoration(hintText: "Category"),
+                ),
+                TextField(
+                  controller: amountController,
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(hintText: "Amount"),
+                ),
+                TextField(
+                  controller: odometerController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(hintText: "Odometer"),
+                ),
+                TextField(
+                  controller: currencyController,
+                  decoration: InputDecoration(hintText: "Currency"),
+                ),
+                // Add more fields as necessary
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () {
+                // Update Firestore document
+                FirebaseFirestore.instance
+                    .collection('cars')
+                    .doc(_editableCar!.id)
+                    .collection('spendings')
+                    .doc(spendingId)
+                    .update({
+                  'category': categoryController.text,
+                  'amount': double.tryParse(amountController.text) ??
+                      existingSpending.amount,
+                  'odometer': int.tryParse(odometerController.text) ??
+                      existingSpending.odometer,
+                  'currency': currencyController.text,
+                  // Add additional fields here
+                });
+
+                Navigator.of(context).pop(true);
+              },
+              child: Text("Save"),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (updated == true) {
+      // Optionally refresh your UI here
+      _refreshEditableCar();
+    }
+  }
+
+  Future<void> _deleteSpending(String spendingId) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Delete Spending"),
+          content: Text("Are you sure you want to delete this spending?"),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text("Delete", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      FirebaseFirestore.instance
+          .collection('cars')
+          .doc(_editableCar!.id)
+          .collection('spendings')
+          .doc(spendingId)
+          .delete();
+
+      _refreshEditableCar();
+    }
+  }
+
   Future<void> _addSpendingToFirestore(
       String category, double amount, int odometer, String currency) async {
     final spending = Spending(
+      id: '',
       category: category,
       amount: amount,
       odometer: odometer,
@@ -495,70 +905,72 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
       date: DateTime.now(),
     );
 
-    // Assuming you have a carId variable that contains the ID of the current car
     String carId = _editableCar!.id;
-
-    // Add the spending to Firestore under the current car document
-    // This example assumes you have a subcollection 'spendings' under each car document
     await FirebaseFirestore.instance
         .collection('cars')
         .doc(carId)
         .collection('spendings')
         .add(spending.toJson());
+    _refreshEditableCar();
+  }
 
-    // Optionally refresh your UI or state to reflect the new spending
-    _refreshEditableCar(); // This might need adjustments based on how your app is structured
+  void refreshDocumentsList() {
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final Car displayCar = updatedCar ??
-        widget
-            .car; // Use updatedCar if available, otherwise fallback to the initial car details
-    final dateFormat = DateFormat('yyyy-MM-dd'); // Define your preferred format
+    final Car displayCar = updatedCar ?? widget.car;
+    final dateFormat = DateFormat('dd-MM-yyyy');
     print("Annual Tax: ${widget.car.annualTax}");
     print("Insurance: ${widget.car.insurance}");
     print("Next Service: ${widget.car.nextServiceInterval}");
 
     return WillPopScope(
       onWillPop: () async {
-        // Indicate that the previous screen might need to refresh or handle the pop action appropriately
-        Navigator.pop(context,
-            true); // You're passing true back to indicate some action might be needed
-        return true; // This allows the navigation to proceed
+        Navigator.pop(context, true);
+        return true;
       },
       child: Scaffold(
         appBar: AppBar(
           title: Text(displayCar.make + ' ' + displayCar.model),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.pie_chart),
+              onPressed: () {
+                if (_editableCar != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          StatisticsScreen(car: _editableCar!),
+                    ),
+                  );
+                } else {
+                  // Handle the case where _editableCar is null, if necessary
+                  print("Car is null, cannot navigate to StatisticsScreen");
+                }
+              },
+            ),
+          ],
         ),
         body: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                //_buildMakeEditField(),
-                //new version
                 _buildEditableField('make', _editableCar?.make ?? '', 'Make'),
                 _buildEditableField(
                     'model', _editableCar?.model ?? '', 'Model'),
                 _buildEditableField('vin', _editableCar?.vin ?? '', 'VIN'),
                 _buildEditableField('licensePlate',
                     _editableCar?.licensePlate ?? '', 'License Plate'),
-                // Text('Model: ${widget.car.model}'),
-                // Text('VIN: ${widget.car.vin}'),
-                // Text('License Plate: ${widget.car.licensePlate}'),
-
-                // Conditional display based on whether the date is null or not is no longer needed here
-                // as the DateProgressCard itself handles a null date scenario.
-
-                if (widget.car.annualTax != null ||
-                    true) // Always true for demonstration; adjust logic as needed
+                if (widget.car.annualTax != null || true)
                   DateProgressCard(
                     title: 'Annual Tax',
                     initialExpiryDate: widget.car.annualTax,
                     onUpdate: (newDate) async {
-                      // Assuming you have the car ID and field name to update
                       String carId = _editableCar!.id;
                       await FirebaseFirestore.instance
                           .collection('cars')
@@ -567,12 +979,10 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
                         'annualTax': Timestamp.fromDate(newDate),
                       });
 
-                      // After updating Firestore, refresh local state
                       fetchUpdatedCarDetails(); // This should fetch the car again and call setState
                     },
                   ),
-                if (widget.car.insurance != null ||
-                    true) // Always true for demonstration; adjust logic as needed
+                if (widget.car.insurance != null || true)
                   DateProgressCard(
                     title: 'Insurance',
                     initialExpiryDate: widget.car.insurance,
@@ -594,6 +1004,14 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
                   car: _editableCar!,
                   onAddSpending: () => _showAddSpendingDialog(context),
                   onSpendingAdded: _refreshEditableCar,
+                  onUpdateSpending: _updateSpending,
+                  onDeleteSpending: _deleteSpending,
+                  selectedCurrency: selectedCurrency,
+                ),
+                DocumentsCard(
+                  car: widget.car,
+                  onDocumentAdded: () => uploadDocumentPicker2(context),
+                  onRefreshRequested: refreshDocuments,
                 ),
               ],
             ),
@@ -601,17 +1019,25 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
         ),
         bottomNavigationBar: SafeArea(
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(primary: Colors.red),
               onPressed: () => deleteCar(context, widget.car.id),
-              child: const Text('Delete Car',
-                  style: TextStyle(color: Colors.white)),
+              child: Text('Delete Car', style: TextStyle(color: Colors.white)),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _loadCurrencyPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    String? savedCurrency = prefs.getString('selectedCurrency') ?? "USD";
+    setState(() {
+      currencyController = TextEditingController(text: savedCurrency);
+      selectedCurrency = savedCurrency;
+    });
   }
 }

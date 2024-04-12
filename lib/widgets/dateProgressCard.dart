@@ -24,8 +24,7 @@ class _DateProgressCardState extends State<DateProgressCard> {
   @override
   void initState() {
     super.initState();
-    expiryDate = widget
-        .initialExpiryDate; // Initialize expiryDate with the initial value
+    expiryDate = widget.initialExpiryDate;
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -38,14 +37,13 @@ class _DateProgressCardState extends State<DateProgressCard> {
     if (picked != null && picked != expiryDate) {
       setState(() {
         expiryDate = picked;
-        widget.onUpdate(picked); // Notify the parent widget of the update
+        widget.onUpdate(picked);
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    //final dateFormat = DateFormat('yyyy-MM-dd'); // Define your preferred format
     final dateFormat = DateFormat('dd-MM-yyyy');
     final currentDate = DateTime.now();
     double progress = 0.0;
@@ -53,13 +51,12 @@ class _DateProgressCardState extends State<DateProgressCard> {
 
     if (expiryDate != null) {
       daysLeft = expiryDate!.difference(currentDate).inDays;
-      final totalDuration =
-          365; // Assuming a year-long period; adjust as needed
+      final totalDuration = 365; //year-long period
       progress = daysLeft > 0 ? (1 - daysLeft / totalDuration) : 1.0;
-      progress = progress.clamp(0.0, 1.0); // Ensure progress is between 0 and 1
+      progress = progress.clamp(0.0, 1.0); // progress is between 0 and 1
     }
     Color progressColor =
-        progress >= 0.8 ? Colors.red : Theme.of(context).colorScheme.primary;
+        progress >= 0.85 ? Colors.red : Theme.of(context).colorScheme.primary;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -69,8 +66,7 @@ class _DateProgressCardState extends State<DateProgressCard> {
             SizedBox(height: 4.0),
             if (expiryDate != null) ...[
               Row(
-                mainAxisAlignment: MainAxisAlignment
-                    .spaceBetween, // Adjust as needed for layout
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text("Expiry Date: ${dateFormat.format(expiryDate!)}"),
                   Text("${daysLeft > 0 ? daysLeft : 0} days left"),
@@ -81,8 +77,7 @@ class _DateProgressCardState extends State<DateProgressCard> {
                 height: 8.0,
                 child: LinearProgressIndicator(
                   value: progress,
-                  color:
-                      progressColor, // Use the dynamic color based on progress
+                  color: progressColor,
                   backgroundColor: progressColor.withOpacity(0.3),
                 ),
               ),

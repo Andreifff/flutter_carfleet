@@ -11,7 +11,7 @@ class ResultScreen extends StatefulWidget {
   final String? vin;
   final String? carMake;
 
-  const ResultScreen(
+  ResultScreen(
       {Key? key, required this.text, this.licensePlate, this.vin, this.carMake})
       : super(key: key);
 
@@ -104,8 +104,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 decoration: InputDecoration(labelText: 'Car Model'),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0, vertical: 20.0),
+                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     minimumSize: Size(double.infinity,
@@ -113,7 +112,7 @@ class _ResultScreenState extends State<ResultScreen> {
                   ),
                   onPressed:
                       addCarToFirebase, // Adjusted to call the method correctly
-                  child: const Text('Add Car'),
+                  child: Text('Add Car'),
                 ),
               ),
             ],
