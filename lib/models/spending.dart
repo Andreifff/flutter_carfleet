@@ -3,9 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Spending {
   String id;
   final String category;
-  final double amount;
+  double amount;
   final int odometer;
-  final String currency;
+  String currency;
   final DateTime date;
   double? convertedAmount;
 

@@ -155,15 +155,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
             return Column(
               children: [
+                // Expanded(
+                //   child: ListView.builder(
+                //     shrinkWrap: true,
+                //     itemCount: cars.length,
+                //     itemBuilder: (context, index) {
+                //       final car = cars[index];
+                //       return ListTile(
+                //         title: Text(car.make + ' ' + car.model),
+                //         subtitle: Text('License Plate: ${car.licensePlate}'),
+                //         onTap: () async {
+                //           final result = await Navigator.push(
+                //             context,
+                //             MaterialPageRoute(
+                //                 builder: (context) =>
+                //                     CarDetailsScreen(car: car)),
+                //           );
+                //           if (result == true) {
+                //             _refreshCarsList();
+                //           }
+                //         },
+                //       );
+                //     },
+                //   ),
+                // ),
                 Expanded(
                   child: ListView.builder(
                     shrinkWrap: true,
                     itemCount: cars.length,
                     itemBuilder: (context, index) {
                       final car = cars[index];
-                      return ListTile(
-                        title: Text(car.make + ' ' + car.model),
-                        subtitle: Text('License Plate: ${car.licensePlate}'),
+                      return InkWell(
                         onTap: () async {
                           final result = await Navigator.push(
                             context,
@@ -175,6 +197,29 @@ class _HomeScreenState extends State<HomeScreen> {
                             _refreshCarsList();
                           }
                         },
+                        child: Card(
+                          elevation: 4,
+                          margin:
+                              EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          child: Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(car.make,
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold)),
+                                SizedBox(height: 2),
+                                Text(car.model, style: TextStyle(fontSize: 16)),
+                                SizedBox(height: 2),
+                                Text('License Plate: ${car.licensePlate}',
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.grey)),
+                              ],
+                            ),
+                          ),
+                        ),
                       );
                     },
                   ),

@@ -90,11 +90,19 @@ class _DocumentsCardState extends State<DocumentsCard> {
     );
   }
 
-  Future<void> _launchURL(String url) async {
-    if (await canLaunch(url)) {
-      await launch(url);
+  Future<void> _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (await canLaunchUrl(url)) {
+      bool launched = await launchUrl(
+        url,
+        mode: LaunchMode
+            .externalApplication, // Opens the URL outside your app in the default browser
+      );
+      if (!launched) {
+        print('Failed to launch $url');
+      }
     } else {
-      print('Could not launch $url');
+      print('Ahhh Could not launch $url');
     }
   }
 

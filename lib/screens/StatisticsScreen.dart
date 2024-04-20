@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_application_2/models/car.dart';
 import 'package:flutter_application_2/models/spending.dart';
-import 'package:flutter_application_2/services/utilities.dart'; // Assuming this exists and has CurrencyUtil
+import 'package:flutter_application_2/services/currency_service.dart';
+import 'package:flutter_application_2/services/utilities.dart';
 
 class StatisticsScreen extends StatefulWidget {
   final Car car;
@@ -16,13 +17,66 @@ class StatisticsScreen extends StatefulWidget {
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
   List<Spending> spendings = [];
-  String selectedCurrency = 'USD'; // Default currency
-  DateTime startDate = DateTime(DateTime.now().year, 1, 1);
-  DateTime endDate = DateTime(DateTime.now().year, 12, 31);
+  Map<String, double> conversionRates = {};
+  Map<String, double> rates = {};
+  String selectedCurrency =
+      'USD'; // Default currency// Default currency set to EUR
+
   @override
   void initState() {
     super.initState();
-    fetchSpendings();
+    conversionRates = getConversionRates();
+    //fetchSpendings();
+    fetchAndConvertSpendings();
+    CurrencyService()
+        .fetchConversionRates(selectedCurrency)
+        .then((fetchedRates) {
+      setState(() {
+        rates = fetchedRates;
+      });
+    }).catchError((error) {
+      print('Error fetching rates: $error');
+    });
+  }
+
+  Map<String, double> getConversionRates() {
+    // Mock conversion rates, replace with actual rates from your API or database
+    return {'USD': 1.0, 'EUR': 1.18, 'RON': 0.22, 'GBP': 1.30};
+  }
+//kindofworks
+
+  void fetchAndConvertSpendings() async {
+    try {
+      // First fetch the latest spendings from the Firestore
+      await fetchSpendings(); // This updates the `spendings` state internally
+
+      // After fetching spendings, get the latest conversion rates
+      var rates =
+          await CurrencyService().fetchConversionRates(selectedCurrency);
+
+      // Now convert each fetched spending to the selected currency
+      List<Spending> convertedSpendings = [];
+      for (var spending in spendings) {
+        double rate = rates[spending.currency] ?? 1.0;
+        double convertedAmount =
+            spending.amount * (1 / rate); // Adjusted conversion logic
+        convertedSpendings.add(Spending(
+          id: spending.id,
+          category: spending.category,
+          amount: convertedAmount,
+          odometer: spending.odometer,
+          currency: selectedCurrency,
+          date: spending.date,
+        ));
+      }
+
+      // Finally, update the state with the converted spendings
+      setState(() {
+        spendings = convertedSpendings;
+      });
+    } catch (e) {
+      print('Error fetching or converting spendings: $e');
+    }
   }
 
   Future<void> fetchSpendings() async {
@@ -36,23 +90,49 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       return Spending.fromFirestore(doc.data() as Map<String, dynamic>, doc.id);
     }).toList();
 
+    // Directly update the state here inside fetchSpendings
     setState(() {
       spendings = fetchedSpendings;
     });
   }
 
   double convertAmountToSelectedCurrency(double amount, String currency) {
-    Map<String, double> conversionRates = {
-      'USD': 1.0,
-      'EUR': 1.18,
-      'RON': 0.24,
-      // Add other mock rates here
-    };
+    double rateFrom =
+        conversionRates[currency] ?? 1.0; // Rate from original currency to USD
+    double rateTo = conversionRates[selectedCurrency] ??
+        1.0; // Rate from USD to selected currency
+    return (amount / rateFrom) * rateTo;
+  }
 
-    // Convert amount from original currency to USD
-    double amountInUSD = amount / (conversionRates[currency] ?? 1.0);
-    // Convert USD to selected currency
-    return amountInUSD * (conversionRates[selectedCurrency] ?? 1.0);
+  List<PieChartSectionData> _getPieChartSections() {
+    Map<String, double> categoryTotals = {};
+    for (var spending in spendings) {
+      double convertedAmount =
+          convertAmountToSelectedCurrency(spending.amount, spending.currency);
+      categoryTotals.update(
+          spending.category, (existing) => existing + convertedAmount,
+          ifAbsent: () => convertedAmount);
+    }
+
+    int index = 0;
+    final double radius = 110; // Chart radius
+    final double fontSize = 12; // Font size for labels
+
+    return categoryTotals.entries.map((entry) {
+      final color = Colors.primaries[index++ % Colors.primaries.length];
+      return PieChartSectionData(
+        color: color,
+        value: entry.value,
+        title:
+            '${entry.key}: ${entry.value.toStringAsFixed(2)} $selectedCurrency',
+        radius: radius,
+        titleStyle: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      );
+    }).toList();
   }
 
   @override
@@ -67,6 +147,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             onChanged: (String? newValue) {
               setState(() {
                 selectedCurrency = newValue!;
+                fetchAndConvertSpendings(); // Refetch and convert spendings whenever the currency changes
               });
             },
             items: CurrencyUtil.currencies
@@ -84,7 +165,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           children: [
             if (spendings.isNotEmpty)
               Container(
-                height: 300, // Specify a fixed height for the chart
+                height: 300, // Fixed height for the pie chart
                 child: PieChart(
                   PieChartData(
                     sections: _getPieChartSections(),
@@ -99,41 +180,33 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     );
   }
 
-  List<PieChartSectionData> _getPieChartSections() {
-    Map<String, double> categoryTotals = {};
-    for (var spending in spendings) {
-      String category = spending.category;
-      double amount =
-          convertAmountToSelectedCurrency(spending.amount, spending.currency);
+  // List<PieChartSectionData> _getPieChartSections() {
+  //   Map<String, double> categoryTotals = {};
+  //   for (var spending in spendings) {
+  //     categoryTotals.update(spending.category,
+  //         (existingAmount) => existingAmount + spending.amount,
+  //         ifAbsent: () => spending.amount);
+  //   }
 
-      categoryTotals.update(
-          category, (existingAmount) => existingAmount + amount,
-          ifAbsent: () => amount);
-    }
+  //   int index = 0;
+  //   final double radius = 110;
+  //   final double fontSize = 12;
 
-    int index = 0;
-    // Adjust these values as needed for better visibility and readability
-    final double radius = 110; // Increase the radius for a bigger chart
-    final double fontSize = 14; // Adjust font size for better readability
-    final double titlePositionPercentageOffset =
-        0.55; // Adjust title position closer or farther from the center
-
-    return categoryTotals.entries.map((entry) {
-      final color = Colors.primaries[index % Colors.primaries.length];
-      index++;
-      return PieChartSectionData(
-        color: color,
-        value: entry.value,
-        title:
-            '${entry.key}: ${entry.value.toStringAsFixed(2)} $selectedCurrency',
-        radius: radius,
-        titleStyle: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-        titlePositionPercentageOffset: titlePositionPercentageOffset,
-      );
-    }).toList();
-  }
+  //   return categoryTotals.entries.map((entry) {
+  //     final color = Colors.primaries[index % Colors.primaries.length];
+  //     index++;
+  //     return PieChartSectionData(
+  //       color: color,
+  //       value: entry.value,
+  //       title:
+  //           '${entry.key}: ${entry.value.toStringAsFixed(2)} $selectedCurrency',
+  //       radius: radius,
+  //       titleStyle: TextStyle(
+  //           fontSize: fontSize,
+  //           fontWeight: FontWeight.bold,
+  //           color: Colors.white),
+  //       titlePositionPercentageOffset: 0.55,
+  //     );
+  //   }).toList();
+  // }
 }

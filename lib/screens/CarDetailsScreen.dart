@@ -383,10 +383,18 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
       String filePath = 'cars/${widget.car.id}/documents/$documentName';
 
       try {
+        // Getting the current user's UID
+        String userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
         Reference storageReference =
             FirebaseStorage.instance.ref().child(filePath);
-        await storageReference.putFile(file);
+        SettableMetadata metadata =
+            SettableMetadata(customMetadata: {'userId': userId});
+
+        await storageReference.putFile(
+            file, metadata); // Include metadata in the upload
         String fileUrl = await storageReference.getDownloadURL();
+
         // Save document details to Firestore under the car's documents collection
         await FirebaseFirestore.instance
             .collection('cars')
@@ -397,6 +405,8 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
           'name': fileName,
           'url': fileUrl,
           'uploadedAt': FieldValue.serverTimestamp(),
+          'uploaderId':
+              userId, // Save the uploader's ID to Firestore for additional verification if needed
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
