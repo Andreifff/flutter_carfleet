@@ -83,7 +83,7 @@ class _SignUpPageState extends State<SignUpPage> {
                   height: 45,
                   decoration: BoxDecoration(
                     color: Colors.blue,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Center(
                       child: isSigningUp

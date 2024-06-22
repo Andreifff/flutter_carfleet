@@ -67,19 +67,47 @@ class _DocumentsCardState extends State<DocumentsCard> {
     });
   }
 
+  // Future<void> _deleteDocument(CarDocument document) async {
+  //   String documentPath = 'cars/${widget.car.id}/documents/${document.id}';
+
+  //   await FirebaseFirestore.instance
+  //       .collection('cars')
+  //       .doc(widget.car.id)
+  //       .collection('documents')
+  //       .doc(document.id)
+  //       .delete();
+  //   await FirebaseStorage.instance.ref(documentPath).delete();
+  //   print('File deleted successfully from Firebase Storage.');
+
+  //   fetchDocuments(); // Refresh documents list after deletion.
+  // }
   Future<void> _deleteDocument(CarDocument document) async {
     String documentPath = 'cars/${widget.car.id}/documents/${document.id}';
 
-    await FirebaseFirestore.instance
-        .collection('cars')
-        .doc(widget.car.id)
-        .collection('documents')
-        .doc(document.id)
-        .delete();
-    await FirebaseStorage.instance.ref(documentPath).delete();
-    print('File deleted successfully from Firebase Storage.');
+    try {
+      // Attempt to delete the document from Firestore
+      await FirebaseFirestore.instance
+          .collection('cars')
+          .doc(widget.car.id)
+          .collection('documents')
+          .doc(document.id)
+          .delete();
 
-    fetchDocuments(); // Refresh documents list after deletion.
+      // Attempt to delete the file from Firebase Storage
+      await FirebaseStorage.instance.ref(documentPath).delete();
+    } catch (e) {
+      // Log error or handle it accordingly if the document does not exist
+      print('Error deleting document: $e');
+    }
+
+    // Update the local list of documents to remove the deleted item
+    setState(() {
+      documents.removeWhere((CarDocument d) => d.id == document.id);
+    });
+
+    // Optionally show a message that the document was deleted
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text("Document deleted successfully")));
   }
 
   void _openImageScreen(String imageUrl) {
@@ -93,18 +121,41 @@ class _DocumentsCardState extends State<DocumentsCard> {
   Future<void> _launchURL(String urlString) async {
     final Uri url = Uri.parse(urlString);
     if (await canLaunchUrl(url)) {
-      bool launched = await launchUrl(
-        url,
-        mode: LaunchMode
-            .externalApplication, // Opens the URL outside your app in the default browser
-      );
-      if (!launched) {
-        print('Failed to launch $url');
+      try {
+        await launchUrl(
+          url,
+          mode: LaunchMode
+              .externalApplication, // Opens the URL outside your app in the default browser
+        );
+      } catch (e) {
+        print('Failed to launch $url: $e');
+        // Optionally, handle the error in the UI, for example:
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Failed to open document. Please try again.')));
       }
     } else {
-      print('Ahhh Could not launch $url');
+      print('Could not launch $url');
+      // Optionally, alert the user that the URL could not be handled
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cannot open the link, unsupported URL')));
     }
   }
+
+  // Future<void> testLaunchURL() async {
+  //   const String testUrl = 'https://www.google.com';
+  //   if (await canLaunchUrl(Uri.parse(testUrl))) {
+  //     try {
+  //       await launchUrl(
+  //         Uri.parse(testUrl),
+  //         mode: LaunchMode.externalApplication,
+  //       );
+  //     } catch (e) {
+  //       print('Failed to launch test URL: $e');
+  //     }
+  //   } else {
+  //     print('Cannot launch test URL');
+  //   }
+  // }
 
   Widget _documentListItem(CarDocument document) {
     bool isImage =
@@ -167,11 +218,13 @@ class _DocumentsCardState extends State<DocumentsCard> {
                                 width: 50, height: 50)
                             : Icon(Icons.file_present),
                         title: Text(documents[index].name),
-                        onTap: () => isImage
-                            ? Navigator.of(context).push(MaterialPageRoute(
-                                builder: (context) => ImageScreen(
-                                    imageUrl: documents[index].url)))
-                            : _launchURL(documents[index].url),
+                        onTap: () =>
+                            //testLaunchURL(),
+                            isImage
+                                ? Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (context) => ImageScreen(
+                                        imageUrl: documents[index].url)))
+                                : _launchURL(documents[index].url),
                         trailing: IconButton(
                           icon: Icon(
                             Icons.delete,

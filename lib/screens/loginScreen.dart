@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_2/screens/resetPasswordScreen.dart';
 import 'package:flutter_application_2/screens/signupScreen.dart';
 import 'package:flutter_application_2/widgets/form_container_widget.dart';
 import 'package:flutter_application_2/widgets/toast.dart';
@@ -76,7 +77,7 @@ class _LoginPageState extends State<LoginPage> {
                   height: 45,
                   decoration: BoxDecoration(
                     color: Colors.blue,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Center(
                     child: _isSigning
@@ -105,7 +106,7 @@ class _LoginPageState extends State<LoginPage> {
                   height: 45,
                   decoration: BoxDecoration(
                     color: Colors.red,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Center(
                     child: Row(
@@ -157,6 +158,25 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ],
+              ),
+              SizedBox(
+                height: 10,
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => ResetPasswordScreen()),
+                  );
+                },
+                child: Text(
+                  "Forgot Password?",
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),

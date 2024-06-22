@@ -25,7 +25,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   @override
   void initState() {
     super.initState();
-    conversionRates = getConversionRates();
+    //conversionRates = getConversionRates();
     //fetchSpendings();
     fetchAndConvertSpendings();
     CurrencyService()
@@ -39,27 +39,46 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     });
   }
 
-  Map<String, double> getConversionRates() {
-    // Mock conversion rates, replace with actual rates from your API or database
-    return {'USD': 1.0, 'EUR': 1.18, 'RON': 0.22, 'GBP': 1.30};
+  // Map<String, double> getConversionRates() {
+  //   // Mock conversion rates, replace with actual rates from your API or database
+  //   return {'USD': 1.0, 'EUR': 1.18, 'RON': 0.22, 'GBP': 1.30};
+  // }
+
+  Map<DateTime, double> spendingByDate = {};
+
+  void aggregateAndConvertSpendings() {
+    Map<DateTime, double> tempMap = {};
+    for (var spending in spendings) {
+      DateTime date =
+          DateTime(spending.date.year, spending.date.month, spending.date.day);
+      double convertedAmount =
+          convertAmountToSelectedCurrency(spending.amount, spending.currency);
+      tempMap[date] = (tempMap[date] ?? 0) + convertedAmount;
+    }
+
+    setState(() {
+      spendingByDate = tempMap;
+    });
+
+    print("Aggregated Spending Dates: ${spendingByDate.keys.toList()}");
+    print("Aggregated Spending Values: ${spendingByDate.values.toList()}");
   }
+
 //kindofworks
 
   void fetchAndConvertSpendings() async {
     try {
-      // First fetch the latest spendings from the Firestore
-      await fetchSpendings(); // This updates the `spendings` state internally
+      await fetchSpendings();
+      print("Spendings after fetch: ${spendings.length}"); // Debug print
 
-      // After fetching spendings, get the latest conversion rates
       var rates =
           await CurrencyService().fetchConversionRates(selectedCurrency);
+      print("Conversion Rates: $rates"); // Debug print
 
-      // Now convert each fetched spending to the selected currency
       List<Spending> convertedSpendings = [];
       for (var spending in spendings) {
         double rate = rates[spending.currency] ?? 1.0;
-        double convertedAmount =
-            spending.amount * (1 / rate); // Adjusted conversion logic
+        double convertedAmount = spending.amount * (1 / rate);
         convertedSpendings.add(Spending(
           id: spending.id,
           category: spending.category,
@@ -70,7 +89,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ));
       }
 
-      // Finally, update the state with the converted spendings
+      print("Converted Spendings: ${convertedSpendings.length}"); // Debug print
+
       setState(() {
         spendings = convertedSpendings;
       });
@@ -98,10 +118,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   double convertAmountToSelectedCurrency(double amount, String currency) {
     double rateFrom =
-        conversionRates[currency] ?? 1.0; // Rate from original currency to USD
+        conversionRates[currency] ?? 1.0; // Fallback to 1 if no rate found
     double rateTo = conversionRates[selectedCurrency] ??
-        1.0; // Rate from USD to selected currency
-    return (amount / rateFrom) * rateTo;
+        1.0; // Fallback to 1 if no rate found
+    double convertedAmount = (amount / rateFrom) * rateTo;
+    print(
+        "Converting $amount from $currency to $selectedCurrency at rate $rateFrom to $rateTo results in $convertedAmount");
+    return convertedAmount;
   }
 
   List<PieChartSectionData> _getPieChartSections() {
@@ -135,8 +158,39 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }).toList();
   }
 
+  List<FlSpot> getSpots() {
+    List<FlSpot> spots = [];
+    List<DateTime> sortedDates = spendingByDate.keys.toList()..sort();
+    for (var date in sortedDates) {
+      spots.add(FlSpot(
+          date.millisecondsSinceEpoch.toDouble(), spendingByDate[date]!));
+      print(
+          "Spot: X=${date.millisecondsSinceEpoch.toDouble()}, Y=${spendingByDate[date]}");
+    }
+    return spots;
+  }
+
+  LineChartData mainData() {
+    return LineChartData(
+      gridData: FlGridData(show: false),
+      titlesData: FlTitlesData(show: false),
+      borderData: FlBorderData(show: false),
+      lineBarsData: [
+        LineChartBarData(
+          spots: getSpots(),
+          isCurved: true,
+          barWidth: 2,
+          color: Colors.blue,
+          belowBarData: BarAreaData(show: false),
+          dotData: FlDotData(show: false),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    print("Building Chart with spots: ${getSpots().length}");
     return Scaffold(
       appBar: AppBar(
         title: Text('Statistics for ${widget.car.make} ${widget.car.model}'),
@@ -147,7 +201,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             onChanged: (String? newValue) {
               setState(() {
                 selectedCurrency = newValue!;
-                fetchAndConvertSpendings(); // Refetch and convert spendings whenever the currency changes
+                fetchAndConvertSpendings(); // Trigger data fetching and conversion
               });
             },
             items: CurrencyUtil.currencies
@@ -165,7 +219,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           children: [
             if (spendings.isNotEmpty)
               Container(
-                height: 300, // Fixed height for the pie chart
+                height:
+                    300, // Fixed height for the entire block containing the pie chart
                 child: PieChart(
                   PieChartData(
                     sections: _getPieChartSections(),
@@ -174,39 +229,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   ),
                 ),
               ),
+            SizedBox(height: 24),
+            // Text("Spending Over Time",
+            //     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Container(
+              height: 220,
+              child: LineChart(mainData()),
+            ),
           ],
         ),
       ),
     );
   }
-
-  // List<PieChartSectionData> _getPieChartSections() {
-  //   Map<String, double> categoryTotals = {};
-  //   for (var spending in spendings) {
-  //     categoryTotals.update(spending.category,
-  //         (existingAmount) => existingAmount + spending.amount,
-  //         ifAbsent: () => spending.amount);
-  //   }
-
-  //   int index = 0;
-  //   final double radius = 110;
-  //   final double fontSize = 12;
-
-  //   return categoryTotals.entries.map((entry) {
-  //     final color = Colors.primaries[index % Colors.primaries.length];
-  //     index++;
-  //     return PieChartSectionData(
-  //       color: color,
-  //       value: entry.value,
-  //       title:
-  //           '${entry.key}: ${entry.value.toStringAsFixed(2)} $selectedCurrency',
-  //       radius: radius,
-  //       titleStyle: TextStyle(
-  //           fontSize: fontSize,
-  //           fontWeight: FontWeight.bold,
-  //           color: Colors.white),
-  //       titlePositionPercentageOffset: 0.55,
-  //     );
-  //   }).toList();
-  // }
 }

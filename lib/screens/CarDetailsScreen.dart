@@ -242,7 +242,7 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
                   .pop(false), // Dismisses the dialog returning 'false'
             ),
             TextButton(
-              child: Text('Delete'),
+              child: Text('Delete', style: TextStyle(color: Colors.red)),
               onPressed: () => Navigator.of(dialogContext)
                   .pop(true), // Dismisses the dialog returning 'true'
             ),
@@ -1031,7 +1031,7 @@ class _CarDetailsScreenState extends State<CarDetailsScreen> {
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(primary: Colors.red),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => deleteCar(context, widget.car.id),
               child: Text('Delete Car', style: TextStyle(color: Colors.white)),
             ),

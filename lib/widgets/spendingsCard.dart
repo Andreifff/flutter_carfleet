@@ -267,7 +267,7 @@ class _SpendingsCardState extends State<SpendingsCard> {
                       Spending spending = sortedSpendings[index];
                       return ListTile(
                         title: Text(
-                            '${spending.category}: \$${spending.amount.toStringAsFixed(2)} ${spending.currency}'),
+                            '${spending.category}: ${spending.amount.toStringAsFixed(2)} ${spending.currency}'),
                         subtitle: Text(
                             'Odometer: ${spending.odometer} Km, Date: ${DateFormat('yyyy-MM-dd').format(spending.date)}'),
                         trailing: Row(

@@ -41,7 +41,7 @@ class _FormContainerWidgetState extends State<FormContainerWidget> {
         color: Theme.of(context).brightness == Brightness.dark
             ? Colors.grey[800]
             : Colors.grey.withOpacity(0.35),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: TextFormField(
         controller: widget.controller,

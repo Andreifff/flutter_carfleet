@@ -146,9 +146,16 @@ class _HomeScreenState extends State<HomeScreen> {
             if (cars.isEmpty) {
               return SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                child: SizedBox(
-                  height: MediaQuery.of(context).size.height,
-                  child: const Center(child: Text('No cars added yet.')),
+                child: Center(
+                  child: SizedBox(
+                    width: MediaQuery.of(context).size.width / 1.3,
+                    height: MediaQuery.of(context).size.height,
+                    child: const Center(
+                        child: Text(
+                      'No cars added yet. Please tap the button at the bottom to add a new vehicle!',
+                      textAlign: TextAlign.center,
+                    )),
+                  ),
                 ),
               );
             }
